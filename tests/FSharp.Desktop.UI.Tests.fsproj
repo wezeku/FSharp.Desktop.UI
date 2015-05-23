@@ -62,7 +62,9 @@
     <None Include="packages.config" />
     <Compile Include="BindingTests.fs" />
     <Compile Include="ViewTests.fs" />
+    <Compile Include="ViewValidatorTests.fs" />
     <Compile Include="ModelTests.fs" />
+    <Content Include="app.config" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="mscorlib" />
@@ -102,8 +104,6 @@
       <HintPath>..\packages\xunit.extensions.1.9.2\lib\net20\xunit.extensions.dll</HintPath>
       <Private>True</Private>
     </Reference>
-  </ItemGroup>
-  <ItemGroup>
     <ProjectReference Include="..\src\FSharp.Desktop.UI.fsproj">
       <Name>FSharp.Desktop.UI</Name>
       <Project>{0a504360-fe2a-48f7-b785-469d5de44f8e}</Project>

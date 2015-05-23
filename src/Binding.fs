@@ -19,6 +19,9 @@ type DerivedPropertyAttribute = ReflectedDefinitionAttribute
 let coerce _ = undefined
 
 module BindingOptions =
+    open System.Globalization
+    open System.Windows.Controls
+
     let Mode (_ : BindingMode) (_ : 'T) : 'T                 = undefined
     let OneWay (_ : 'T) : 'T                                 = undefined
     let UpdateSource (_ : UpdateSourceTrigger) (_ : 'T) : 'T = undefined
@@ -27,8 +30,12 @@ module BindingOptions =
     let TargetNullValue (_ : obj) (_ : 'T) : 'T              = undefined
     let ValidatesOnDataErrors (_ : bool) (_ : 'T) : 'T       = undefined
     let ValidatesOnExceptions (_ : bool) (_ : 'T) : 'T       = undefined
+    let ViewValidationRule (_ : ValidationRule) (_ : 'T) : 'T  = undefined
+    let ViewValidator (_ : (obj -> CultureInfo -> ViewValidation.ValidationResult)) 
+                      (_ : ValidationStep) (_ : bool) (_ : 'T) = undefined
 
 module Patterns = 
+    open FSharp.Quotations.Evaluator
 
     type IValueConverter with 
         static member OneWay converter = {
@@ -141,6 +148,13 @@ module Patterns =
             Some binding
         | _ -> None
 
+    let (|Argument|) = function
+        // Try a couple of quick, typical expressions before using
+        // the power of QuotationEvaluator (which is slightly slower).
+        | Coerce((Value(obj, _)), _)
+        | Value(obj, _) -> obj
+        | expr -> QuotationEvaluator.EvaluateUntyped expr
+
     let rec (|Source|) = function
         | DerivedProperty binding 
         | ExtensionDerivedProperty binding -> binding
@@ -175,6 +189,18 @@ module Patterns =
             upcast binding
         | SpecificCall <@ BindingOptions.ValidatesOnExceptions @> (None, _, [ Value(value, _); Source(:? Binding as binding) ]) ->
             binding.ValidatesOnExceptions <- unbox value
+            upcast binding
+        | SpecificCall <@ BindingOptions.ViewValidationRule @> (None, _, [ Argument(rule); Source(:? Binding as binding) ]) ->
+            binding.ValidationRules.Add (unbox rule)
+            upcast binding
+        | SpecificCall <@ BindingOptions.ViewValidator @> 
+                      (None, _, [ Argument(validator); 
+                                  Value(validationStep, _); 
+                                  Value(validatesOnTargetUpdated, _); 
+                                  Source(:? Binding as binding) ]) ->
+            binding.ValidationRules.Add (ViewValidation.ValidatorWrapper(unbox validator, 
+                                                                         unbox validationStep, 
+                                                                         unbox validatesOnTargetUpdated))
             upcast binding
         // End of Binding properties modifiers.
 
@@ -222,6 +248,7 @@ type Expr with
                 let argValues =
                     [for arg in args ->
                         match arg with
+                        | Coerce (Var v, cType) -> Expr.Coerce(vars.[v.Name], cType)
                         | Var v -> vars.[v.Name]
                         | e -> e
                     ] |> List.map Expr.RewritePipeIntoCall
@@ -252,9 +279,9 @@ type Binding with
             | tail -> [ tail ]
 
         for e in split expr do
-            let be = e.ToBinding(?mode = mode, ?updateSourceTrigger = updateSourceTrigger, ?fallbackValue = fallbackValue, 
-                                     ?targetNullValue = targetNullValue, ?validatesOnExceptions = validatesOnExceptions, ?validatesOnDataErrors = validatesOnDataErrors)
-            assert not be.HasError
+            e.ToBinding(?mode = mode, ?updateSourceTrigger = updateSourceTrigger, ?fallbackValue = fallbackValue, 
+                        ?targetNullValue = targetNullValue, ?validatesOnExceptions = validatesOnExceptions, ?validatesOnDataErrors = validatesOnDataErrors)
+            |> ignore
     
 open System.Windows.Controls.Primitives
 
